@@ -1,0 +1,14 @@
+# Temporary page and browser profile written by tests/run.sh
+tests/.tmp/
+
+# Backups and exported collections
+*.zip
+GameSorter*.xlsx
+
+# Editor and OS files
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,1417 @@
+/* Everything physical is sized in cm and multiplied by --px (pixels per cm).
+   Elements carry their own measurements as custom properties: --w, --h, --d for width, height and depth,
+   and --x, --y, --z for where they sit on a shelf (from its left, its floor and its back wall). */
+:root
+{
+    --px: 4px;
+    --board: 5px;
+
+    --bg: #1c1f24;
+    --panel: #252930;
+    --panel-edge: #343a44;
+    --text: #e6e8eb;
+    --muted: #8d96a3;
+    --accent: #4c9be8;
+    --wood: #c9a26b;
+    --wood-dark: #a37f4c;
+    --wood-line: #7a5c33;
+    --shelf-back: #3a3128;
+    --ok: #6ed282;
+    --bad: #e66464;
+    --warn: #f0962e;
+}
+
+*
+{
+    box-sizing: border-box;
+}
+
+/* Scrollbars in the dark scheme, wherever they appear: the piles, the shelving when zoomed in, long dialogs.
+   scrollbar-color is inherited, so setting it once covers everything; the ::-webkit rules are for browsers
+   that don't support it yet. */
+:root
+{
+    scrollbar-color: #4a515d var(--bg);
+}
+
+::-webkit-scrollbar
+{
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner
+{
+    background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb
+{
+    background: #4a515d;
+    border: 3px solid var(--bg);
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover
+{
+    background: #5d6573;
+}
+
+html,
+body
+{
+    height: 100%;
+    margin: 0;
+}
+
+body
+{
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
+}
+
+/* ---------- Buttons ---------- */
+
+button
+{
+    padding: 5px 12px;
+    border: 1px solid var(--panel-edge);
+    border-radius: 4px;
+    background: #2e333c;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+button:hover
+{
+    background: #3a404b;
+}
+
+button.primary
+{
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+button.primary:hover
+{
+    filter: brightness(1.1);
+}
+
+button.danger
+{
+    margin-right: auto;
+    border-color: #a34c4c;
+    color: #f0a3a3;
+}
+
+button[hidden]
+{
+    display: none;
+}
+
+/* ---------- Toolbar ---------- */
+
+.toolbar
+{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+    padding: 8px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-edge);
+}
+
+.toolbar h1
+{
+    margin: 0 8px 0 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.toolbar-group
+{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toolbar-zoom
+{
+    margin-left: auto;
+    color: var(--muted);
+}
+
+/* The 2D / 3D toggle: two buttons joined into one control */
+.segmented
+{
+    gap: 0;
+}
+
+.segmented button
+{
+    border-radius: 0;
+}
+
+.segmented button:first-child
+{
+    border-radius: 4px 0 0 4px;
+}
+
+.segmented button:last-child
+{
+    border-left: 0;
+    border-radius: 0 4px 4px 0;
+}
+
+.segmented button[aria-pressed="true"]
+{
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+/* ---------- Workspace: unsorted pile, shelving, unsorted pile ---------- */
+
+.workspace
+{
+    display: grid;
+    grid-template-columns: minmax(200px, 1fr) auto minmax(200px, 1fr);
+    min-height: 0;
+}
+
+.pile-panel
+{
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px;
+}
+
+.pile-panel h2,
+.bookcase h2
+{
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.count
+{
+    font-weight: 400;
+}
+
+.pile
+{
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    align-content: flex-start;
+    gap: 10px 6px;
+    padding: 10px;
+    overflow: auto;
+    border: 1px dashed var(--panel-edge);
+    border-radius: 6px;
+}
+
+.stage
+{
+    min-height: 0;
+    padding: 12px 24px;
+    overflow: auto;
+}
+
+.bookcases
+{
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    min-height: 100%;
+}
+
+/* ---------- Bookcases and shelves ---------- */
+
+.bookcase
+{
+    position: relative;
+}
+
+/* The title is the handle for dragging a bookcase to a new place in the row */
+.bookcase h2
+{
+    text-align: center;
+    cursor: grab;
+}
+
+.bookcase.dragging
+{
+    opacity: 0.35;
+}
+
+.bookcase.drop-before::before,
+.bookcase.drop-after::after
+{
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 2px;
+    background: var(--accent);
+}
+
+.bookcase.drop-before::before
+{
+    left: -14px;
+}
+
+.bookcase.drop-after::after
+{
+    right: -14px;
+}
+
+.bookcase-frame
+{
+    border: var(--board) solid var(--wood);
+    border-bottom-width: calc(var(--board) * 2);
+    border-radius: 2px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* A bookcase's columns stand side by side, with an upright board between them */
+.bookcase-frame
+{
+    display: flex;
+}
+
+.bookcase-column + .bookcase-column
+{
+    border-left: var(--board) solid var(--wood);
+}
+
+.shelf
+{
+    position: relative;
+    width: calc(var(--w) * var(--px));
+    height: calc(var(--h) * var(--px));
+    background: var(--shelf-back);
+    box-shadow: inset 0 6px 10px -6px rgba(0, 0, 0, 0.6);
+}
+
+.shelf + .shelf
+{
+    border-top: var(--board) solid var(--wood-dark);
+    box-sizing: content-box;
+}
+
+.shelf-label
+{
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.28);
+    pointer-events: none;
+}
+
+/* ---------- 3D mode: shelves in oblique projection ---------- */
+
+/* Everything from the frame down shares one 3D space. The frame's transform shears depth down and to the left,
+   so the back wall stays exactly where the 2D view draws it and nearer things slide towards the viewer.
+   Nothing inside may use overflow, filter or opacity on an element with 3D children: each of those flattens them. */
+body.view-3d .bookcase-frame
+{
+    margin: 0 0 calc(var(--pad) * var(--px)) calc(var(--pad) * var(--px));
+    box-shadow: none;
+    transform-style: preserve-3d;
+    transform: var(--frame-transform);
+}
+
+body.view-3d .bookcase-column,
+body.view-3d .shelf
+{
+    transform-style: preserve-3d;
+}
+
+/* The boards. The 2D borders draw them at the back wall; these planes bring them forward to the shelf's front edge.
+   Each shelf has its floor and its piece of the left wall; the first shelf also carries the bookcase's top board.
+   There is no right wall, which would hide the right-hand end of every shelf from this angle.
+   For each board: the surface, its front edge (-edge) and, for horizontal boards, its right-hand end (-end). */
+.shelf-floor,
+.shelf-floor-edge,
+.shelf-floor-end,
+.shelf-wall,
+.shelf-wall-edge,
+.shelf-top,
+.shelf-top-edge,
+.shelf-top-end
+{
+    position: absolute;
+    border: 1px solid var(--wood-line);
+    pointer-events: none;
+}
+
+/* Inner shelves are the darker brown and the outer carcass the lighter one, as in the 2D view */
+.shelf-floor,
+.shelf-floor-edge,
+.shelf-floor-end
+{
+    background: var(--wood-dark);
+}
+
+.shelf:last-child .shelf-floor,
+.shelf:last-child .shelf-floor-edge,
+.shelf:last-child .shelf-floor-end,
+.shelf-wall,
+.shelf-wall-edge,
+.shelf-top,
+.shelf-top-edge,
+.shelf-top-end
+{
+    background: var(--wood);
+}
+
+/* Surfaces seen from above: hinged at their back edge and laid forward.
+   They run 1px past the front so that rounding at odd zoom levels can't open a seam against the front edges. */
+.shelf-floor,
+.shelf-top
+{
+    height: calc(var(--d) * var(--px) + 1px);
+    transform-origin: top;
+    transform: rotateX(90deg);
+}
+
+/* Surfaces seen from the right: hinged at their back edge and swung forward */
+.shelf-wall,
+.shelf-floor-end,
+.shelf-top-end
+{
+    width: calc(var(--d) * var(--px) + 1px);
+    transform-origin: left;
+    transform: rotateY(-90deg);
+}
+
+/* Front edges: flat, moved forward to the front of the shelf */
+.shelf-floor-edge,
+.shelf-wall-edge,
+.shelf-top-edge
+{
+    transform: translateZ(calc(var(--d) * var(--px)));
+}
+
+.shelf-floor,
+.shelf-floor-edge
+{
+    left: 0;
+    top: 100%;
+    width: 100%;
+}
+
+.shelf-floor-edge,
+.shelf-floor-end,
+.shelf-top-edge,
+.shelf-top-end
+{
+    height: var(--board);
+}
+
+/* The bottom board of a bookcase is twice as thick */
+.shelf:last-child .shelf-floor-edge,
+.shelf:last-child .shelf-floor-end
+{
+    height: calc(var(--board) * 2);
+}
+
+.shelf-floor-end
+{
+    left: 100%;
+    top: 100%;
+}
+
+/* The ends and the inside of the wall are shaded so they read as separate surfaces from the front edges */
+.shelf-floor-end,
+.shelf-top-end
+{
+    filter: brightness(0.8);
+}
+
+.shelf-wall
+{
+    left: 0;
+    top: 0;
+    filter: brightness(0.82);
+}
+
+.shelf-wall-edge
+{
+    left: calc(var(--board) * -1);
+    top: 0;
+    width: var(--board);
+}
+
+/* The left wall is drawn per shelf but has to read as one piece: each piece carries on down past the end of the
+   shelf board and 1px into the next piece, with no outline where they meet */
+.shelf-wall,
+.shelf-wall-edge
+{
+    height: calc(100% + var(--board) + 1px);
+    border-top: 0;
+    border-bottom: 0;
+}
+
+.shelf:last-child .shelf-wall,
+.shelf:last-child .shelf-wall-edge
+{
+    height: calc(100% + var(--board) * 2);
+}
+
+.shelf:last-child .shelf-wall-edge
+{
+    border-bottom: 1px solid var(--wood-line);
+}
+
+.shelf-top,
+.shelf-top-edge,
+.shelf-top-end
+{
+    display: none;
+    top: calc(var(--board) * -1);
+}
+
+.shelf:first-child .shelf-top,
+.shelf:first-child .shelf-top-edge,
+.shelf:first-child .shelf-top-end
+{
+    display: block;
+}
+
+.shelf-top,
+.shelf-top-edge
+{
+    left: calc(var(--board) * -1);
+    width: calc(100% + var(--board) * 2);
+}
+
+.shelf-top-end
+{
+    left: calc(100% + var(--board));
+}
+
+/* Opens the top view of a shelf. It sits in the shelf's top right corner, above the boxes, and in 3D at the
+   front of the shelf so that they don't hide it. The shelf's size label moves over to make room. */
+.top-view-button
+{
+    position: absolute;
+    right: 4px;
+    top: 4px;
+    z-index: 5;
+    display: flex;
+    padding: 3px 6px;
+    opacity: 0.75;
+}
+
+.top-view-button:hover
+{
+    opacity: 1;
+}
+
+body.view-3d .top-view-button
+{
+    transform: translateZ(calc(var(--d) * var(--px)));
+}
+
+.shelf:has(> .top-view-button) .shelf-label
+{
+    right: 38px;
+}
+
+/* ---------- Game boxes ---------- */
+
+.box
+{
+    position: relative;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--w) * var(--px));
+    height: calc(var(--h) * var(--px));
+    padding: 2px;
+    overflow: hidden;
+    background: hsl(var(--hue) 45% 40%);
+    border: 1px solid hsl(var(--hue) 45% 24%);
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 11px;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.shelf .box
+{
+    position: absolute;
+    left: calc(var(--x) * var(--px));
+    bottom: calc(var(--y) * var(--px));
+}
+
+.box:hover
+{
+    filter: brightness(1.15);
+}
+
+/* Labels shrink to fit their box instead of being cut off: the text's length (--ems, as a multiple of its font
+   size) has to fit along the face (less 8px for padding and borders) and its height across it, down to a 1px floor */
+.box-name
+{
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    font-size: max(1px, min(11px, calc((var(--along) * var(--px) - 8px) / var(--ems)), calc(var(--across) * var(--px) * 0.75)));
+    line-height: 1;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+.box.tall .box-name,
+.top-box.tall .box-name
+{
+    writing-mode: vertical-rl;
+}
+
+.box.unnamed .box-name
+{
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.box.locked
+{
+    cursor: default;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75);
+}
+
+.box.locked::after,
+.box.solid.locked .side-front::after
+{
+    content: "\1F512";
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+}
+
+/* A box standing in front of another goes see-through. (3D boxes fade their sides instead: see below.) */
+.box.see-through
+{
+    opacity: 0.5;
+}
+
+/* ---------- Dragging a box ---------- */
+
+/* The box left behind where the drag started */
+.box.drag-source
+{
+    opacity: 0.3;
+}
+
+/* The copy that follows the pointer */
+.box.drag-ghost
+{
+    position: fixed;
+    z-index: 1000;
+    opacity: 0.92;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+}
+
+body.dragging-box
+{
+    cursor: grabbing;
+    user-select: none;
+}
+
+/* 2D: the outline of where the box will land - green, red if it can't go there, orange if it would be flagged */
+.drop-preview
+{
+    position: absolute;
+    left: calc(var(--x) * var(--px));
+    bottom: calc(var(--y) * var(--px));
+    width: calc(var(--w) * var(--px));
+    height: calc(var(--h) * var(--px));
+    background: rgba(110, 210, 130, 0.18);
+    border: 2px dashed var(--ok);
+    border-radius: 2px;
+    pointer-events: none;
+}
+
+.drop-preview.invalid
+{
+    background: rgba(230, 100, 100, 0.18);
+    border-color: var(--bad);
+}
+
+.drop-preview.unstable,
+.drop-preview.overhang
+{
+    background: rgba(240, 150, 46, 0.18);
+    border-color: var(--warn);
+}
+
+/* ---------- 3D mode: boxes as solids ---------- */
+
+/* The element itself marks the back of the box; its front, top and right side are separate planes */
+.box.solid
+{
+    padding: 0;
+    overflow: visible;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    transform-style: preserve-3d;
+    transform: translateZ(calc(var(--z) * var(--px)));
+}
+
+.box.solid:hover
+{
+    filter: none;
+}
+
+.side
+{
+    position: absolute;
+    border: 1px solid hsl(var(--hue) 45% 22%);
+}
+
+.side-front
+{
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    overflow: hidden;
+    background: hsl(var(--hue) 45% 40%);
+    transform: translateZ(calc(var(--d) * var(--px)));
+}
+
+.side-top
+{
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: calc(var(--d) * var(--px));
+    background: hsl(var(--hue) 45% 54%);
+    transform-origin: top;
+    transform: rotateX(90deg);
+}
+
+/* The right side carries the "this side up" arrows */
+.side-right
+{
+    left: 100%;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--d) * var(--px));
+    height: 100%;
+    overflow: hidden;
+    background: hsl(var(--hue) 45% 29%);
+    color: #fff;
+    transform-origin: left;
+    transform: rotateY(-90deg);
+}
+
+.box.solid:hover .side
+{
+    filter: brightness(1.15);
+}
+
+.box.solid.see-through
+{
+    opacity: 1;
+}
+
+.box.solid.see-through .side
+{
+    opacity: 0.35;
+}
+
+.box.solid.drag-source
+{
+    opacity: 1;
+}
+
+.box.solid.drag-source .side
+{
+    opacity: 0.25;
+}
+
+.box.solid.locked::after
+{
+    display: none;
+}
+
+.box.solid.locked .side-front
+{
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75);
+}
+
+/* ---------- Flagged boxes: unstable (less than half supported) or sticking out too far (overhang).
+              Both are allowed when placing by hand and shown in orange. ---------- */
+
+.box.unstable,
+.box.overhang
+{
+    box-shadow: inset 0 0 0 2px var(--warn);
+}
+
+.box.unstable::before,
+.box.overhang::before,
+.box.solid.unstable .side-front::before,
+.box.solid.overhang .side-front::before
+{
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 1px;
+    overflow: hidden;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    color: var(--warn);
+}
+
+.box.unstable::before,
+.box.solid.unstable .side-front::before
+{
+    content: "Unstable";
+}
+
+.box.overhang::before,
+.box.solid.overhang .side-front::before
+{
+    content: "Overhang";
+}
+
+.box.unstable.overhang::before,
+.box.solid.unstable.overhang .side-front::before
+{
+    content: "Unstable, overhang";
+}
+
+.box.solid.unstable,
+.box.solid.overhang
+{
+    box-shadow: none;
+}
+
+.box.solid.unstable::before,
+.box.solid.overhang::before
+{
+    display: none;
+}
+
+.box.solid.unstable .side,
+.box.solid.overhang .side
+{
+    border: 2px solid var(--warn);
+}
+
+/* 3D drag: the whole box is drawn where it will land, outlined red when it can't go there */
+.box.solid.landing
+{
+    pointer-events: none;
+}
+
+.box.solid.landing.invalid .side
+{
+    border: 2px solid var(--bad);
+}
+
+/* ---------- Status bar ---------- */
+
+.statusbar
+{
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 5px 16px;
+    background: var(--panel);
+    border-top: 1px solid var(--panel-edge);
+    font-size: 12px;
+    color: var(--muted);
+}
+
+#message
+{
+    color: var(--accent);
+}
+
+/* Live sort: a progress bar along the top of the status bar, and a busy cursor */
+.sort-progress
+{
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -4px;
+    height: 4px;
+    background: var(--panel-edge);
+}
+
+.sort-progress[hidden]
+{
+    display: none;
+}
+
+#sortProgressBar
+{
+    width: 0;
+    height: 100%;
+    background: var(--accent);
+}
+
+body.sorting,
+body.sorting .box
+{
+    cursor: progress;
+}
+
+/* ---------- Dialogs ---------- */
+
+dialog
+{
+    min-width: 340px;
+    padding: 18px 20px;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--panel-edge);
+    border-radius: 8px;
+}
+
+dialog::backdrop
+{
+    background: rgba(0, 0, 0, 0.55);
+}
+
+dialog h3
+{
+    margin: 0 0 12px;
+}
+
+dialog label
+{
+    display: block;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* color-scheme makes the browser draw its own parts of a field (the up/down arrows on numbers, the tick boxes)
+   in their dark versions */
+dialog input
+{
+    color-scheme: dark;
+    display: block;
+    width: 100%;
+    margin-top: 3px;
+    padding: 5px 7px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--panel-edge);
+    border-radius: 4px;
+    font: inherit;
+}
+
+dialog input[type="checkbox"]
+{
+    display: inline-block;
+    width: auto;
+    margin: 0;
+    vertical-align: middle;
+}
+
+dialog label.check
+{
+    color: var(--text);
+    font-size: 13px;
+}
+
+dialog label.check:has(input:disabled)
+{
+    color: var(--muted);
+}
+
+dialog .dims
+{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+dialog .hint
+{
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+dialog menu
+{
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 14px 0 0;
+    padding: 0;
+}
+
+/* The two choices in the Auto-Sort popup: a title, a count and a line of explanation each */
+.sort-choice
+{
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    text-align: left;
+}
+
+.sort-choice strong
+{
+    font-size: 14px;
+}
+
+.sort-choice .count
+{
+    color: var(--muted);
+}
+
+.sort-choice span:last-child
+{
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* The list of shelves in the bookcase editor */
+.shelf-table
+{
+    margin: 4px 0 8px;
+    border-collapse: collapse;
+}
+
+.shelf-table th
+{
+    padding: 0 4px 4px 0;
+    font-size: 12px;
+    font-weight: 400;
+    text-align: left;
+    color: var(--muted);
+}
+
+.shelf-table td
+{
+    padding: 0 4px 4px 0;
+}
+
+.shelf-table td.center
+{
+    text-align: center;
+}
+
+.shelf-table input
+{
+    margin-top: 0;
+}
+
+.shelf-table input[type="number"]
+{
+    width: 76px;
+}
+
+.row-remove
+{
+    padding: 3px 8px;
+    color: var(--muted);
+}
+
+/* ---------- Game editor: 3D preview of the box ---------- */
+
+.preview3d
+{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 210px;
+    margin-bottom: 12px;
+    background: var(--bg);
+    border: 1px solid var(--panel-edge);
+    border-radius: 6px;
+    perspective: 700px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    overflow: hidden;
+}
+
+/* --cw, --ch and --cd are the box's width, height and depth in px; --tilt and --spin the viewing angle */
+.cuboid
+{
+    position: relative;
+    width: var(--cw);
+    height: var(--ch);
+    transform-style: preserve-3d;
+    transform: rotateX(var(--tilt)) rotateY(var(--spin));
+}
+
+.face
+{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    overflow: hidden;
+    border: 1px solid hsl(var(--hue) 45% 20%);
+    color: #fff;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.face.front,
+.face.back
+{
+    width: var(--cw);
+    height: var(--ch);
+    margin: calc(var(--ch) / -2) 0 0 calc(var(--cw) / -2);
+}
+
+.face.left,
+.face.right
+{
+    width: var(--cd);
+    height: var(--ch);
+    margin: calc(var(--ch) / -2) 0 0 calc(var(--cd) / -2);
+    background: hsl(var(--hue) 45% 30%);
+}
+
+.face.top,
+.face.bottom
+{
+    width: var(--cw);
+    height: var(--cd);
+    margin: calc(var(--cd) / -2) 0 0 calc(var(--cw) / -2);
+    background: hsl(var(--hue) 45% 50%);
+}
+
+.face.front
+{
+    background: hsl(var(--hue) 45% 40%);
+    transform: translateZ(calc(var(--cd) / 2));
+}
+
+.face.back
+{
+    background: hsl(var(--hue) 45% 24%);
+    transform: rotateY(180deg) translateZ(calc(var(--cd) / 2));
+}
+
+.face.right
+{
+    transform: rotateY(90deg) translateZ(calc(var(--cw) / 2));
+}
+
+.face.left
+{
+    transform: rotateY(-90deg) translateZ(calc(var(--cw) / 2));
+}
+
+.face.top
+{
+    transform: rotateX(90deg) translateZ(calc(var(--ch) / 2));
+}
+
+.face.bottom
+{
+    transform: rotateX(-90deg) translateZ(calc(var(--ch) / 2));
+}
+
+/* "This side up": a pair of up arrows over a bar, as on delivery boxes. Hidden in the editor preview unless the
+   box is marked; on shelved 3D boxes they are only added to marked boxes, so there they always show.
+   The preview's front face has none, to leave it clear for the name. */
+.arrows
+{
+    display: none;
+    padding: 0 2px 1px;
+    border-bottom: 2px solid currentColor;
+    font-size: 15px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 1px;
+}
+
+.cuboid.this-side-up .arrows
+{
+    display: block;
+}
+
+.side-right .arrows
+{
+    display: block;
+    font-size: min(15px, calc(var(--h) * var(--px) * 0.45), calc(var(--d) * var(--px) * 0.3));
+}
+
+.rotate-buttons
+{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.rotate-buttons button:disabled
+{
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ---------- Top view: one shelf from above, the same shelf from the front below, unsorted piles either side ---------- */
+
+/* Fills the window width, with a margin left around it so it still reads as a popup */
+#dlgTopView
+{
+    width: calc(100vw - 80px);
+    max-width: none;
+}
+
+/* Zoom control in the dialog's top right corner */
+.top-zoom
+{
+    float: right;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.top-zoom label
+{
+    margin: 0;
+    font-size: 14px;
+}
+
+.top-zoom input
+{
+    width: 140px;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+}
+
+.top-layout
+{
+    display: grid;
+    grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
+    gap: 14px;
+}
+
+.top-pile
+{
+    padding: 0;
+}
+
+.top-pile .pile
+{
+    max-height: 560px;
+}
+
+.top-caption
+{
+    margin: 4px 0;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-align: center;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+/* The plan: back wall at the top. --d is the shelf's depth, --drawn how much depth is drawn (it runs on past the
+   front edge on shelves that allow overhang) and --limit how far past the edge boxes may go. */
+.top-plan
+{
+    position: relative;
+    width: calc(var(--w) * var(--px));
+    height: calc(var(--drawn) * var(--px));
+    margin: var(--board) auto 0;
+    background: var(--shelf-back);
+    touch-action: none;
+    user-select: none;
+}
+
+/* The walls sit just outside the plan. The side walls stop at the shelf's front edge. */
+.plan-wall
+{
+    position: absolute;
+    top: calc(var(--board) * -1);
+    background: var(--wood);
+    pointer-events: none;
+}
+
+.plan-wall-back
+{
+    left: calc(var(--board) * -1);
+    right: calc(var(--board) * -1);
+    height: var(--board);
+}
+
+.plan-wall-left,
+.plan-wall-right
+{
+    width: var(--board);
+    height: calc(var(--d) * var(--px) + var(--board));
+}
+
+.plan-wall-left
+{
+    left: calc(var(--board) * -1);
+}
+
+.plan-wall-right
+{
+    right: calc(var(--board) * -1);
+}
+
+/* The front edge of the shelf */
+.top-plan::after
+{
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--d) * var(--px));
+    border-top: 2px dashed var(--wood);
+    pointer-events: none;
+}
+
+/* The hatched zone past the front edge is how far boxes may stick out */
+.top-plan.overhang::before
+{
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(var(--d) * var(--px));
+    height: calc(var(--limit) * var(--px));
+    background: repeating-linear-gradient(45deg, transparent 0 6px, rgba(255, 255, 255, 0.05) 6px 12px);
+    pointer-events: none;
+}
+
+.top-box
+{
+    position: absolute;
+    left: calc(var(--x) * var(--px));
+    top: calc(var(--z) * var(--px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--w) * var(--px));
+    height: calc(var(--d) * var(--px));
+    padding: 2px;
+    overflow: hidden;
+    background: hsl(var(--hue) 45% 40%);
+    border: 1px solid hsl(var(--hue) 45% 22%);
+    border-radius: 2px;
+    color: #fff;
+    font-size: 11px;
+    cursor: grab;
+}
+
+/* Sitting on top of another box */
+.top-box.raised
+{
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4), 0 3px 8px rgba(0, 0, 0, 0.6);
+}
+
+.top-box.locked
+{
+    cursor: default;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75);
+}
+
+.top-box.moving
+{
+    z-index: 10;
+    opacity: 0.85;
+    cursor: grabbing;
+}
+
+/* Being dragged out of the plan towards an unsorted pile */
+.top-box.leaving
+{
+    opacity: 0.3;
+}
+
+.top-box.unstable,
+.top-box.overhang
+{
+    outline: 2px solid var(--warn);
+}
+
+.top-box.invalid
+{
+    outline: 2px solid var(--bad);
+}
+
+/* Landing outline for a box being dragged into the plan from elsewhere */
+.top-box.plan-preview
+{
+    background: rgba(110, 210, 130, 0.18);
+    border: 2px dashed var(--ok);
+    pointer-events: none;
+}
+
+.top-box.plan-preview.invalid
+{
+    background: rgba(230, 100, 100, 0.18);
+    border-color: var(--bad);
+    outline: 0;
+}
+
+/* The front view of the shelf underneath the plan */
+.top-shelf
+{
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+    user-select: none;
+}
+
+#topViewMessage
+{
+    min-height: 1.4em;
+    margin-top: 8px;
+    color: var(--accent);
+}

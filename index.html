@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game Sorter</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="toolbar">
+        <h1>Game Sorter</h1>
+
+        <div class="toolbar-group">
+            <button type="button" id="btnAddGame">+ Game</button>
+            <button type="button" id="btnAddBookcase">+ Bookcase</button>
+        </div>
+
+        <div class="toolbar-group">
+            <button type="button" id="btnReset" title="Go back to the sample games and bookcases">Reset</button>
+            <button type="button" id="btnClear" title="Remove every game that isn't locked in place, keeping the shelving">Clear</button>
+            <button type="button" id="btnImport">Import</button>
+            <button type="button" id="btnExport">Export</button>
+            <input type="file" id="fileImport" accept=".xlsx,.xls,.csv" hidden>
+        </div>
+
+        <div class="toolbar-group">
+            <button type="button" id="btnAutoSort" class="primary">Auto-Sort</button>
+            <button type="button" id="btnUnshelve">Unshelve Unlocked</button>
+        </div>
+
+        <div class="toolbar-group segmented" title="The same layout drawn flat from the front (2D) or as solid boxes at an angle (3D)">
+            <button type="button" id="btnView2d" aria-pressed="true">2D</button>
+            <button type="button" id="btnView3d" aria-pressed="false">3D</button>
+        </div>
+
+        <div class="toolbar-group toolbar-zoom">
+            <label for="zoom">Zoom</label>
+            <input type="range" id="zoom" min="2" max="10" step="0.25">
+            <button type="button" id="btnFit">Fit</button>
+        </div>
+    </header>
+
+    <main class="workspace">
+        <aside class="pile-panel">
+            <h2>Unsorted <span class="count" id="pileLeftCount"></span></h2>
+            <div class="pile" id="pileLeft"></div>
+        </aside>
+
+        <section class="stage" id="stage">
+            <div class="bookcases" id="bookcases"></div>
+        </section>
+
+        <aside class="pile-panel">
+            <h2>Unsorted <span class="count" id="pileRightCount"></span></h2>
+            <div class="pile" id="pileRight"></div>
+        </aside>
+    </main>
+
+    <footer class="statusbar">
+        <div class="sort-progress" id="sortProgress" hidden><div id="sortProgressBar"></div></div>
+        <span id="status"></span>
+        <span id="message"></span>
+    </footer>
+
+    <dialog id="dlgGame">
+        <form method="dialog">
+            <h3>Add Game</h3>
+            <div class="preview3d" id="gamePreview" title="Drag to look around">
+                <div class="cuboid">
+                    <div class="face front"><span></span></div>
+                    <div class="face back"><i class="arrows">&uarr;&uarr;</i></div>
+                    <div class="face left"><i class="arrows">&uarr;&uarr;</i></div>
+                    <div class="face right"><i class="arrows">&uarr;&uarr;</i></div>
+                    <div class="face top"></div>
+                    <div class="face bottom"></div>
+                </div>
+            </div>
+            <label>Name <input type="text" name="name" placeholder="(optional name)"></label>
+            <div class="dims">
+                <label>Width (cm) <input type="number" name="width" min="0.1" step="0.1" required></label>
+                <label>Height (cm) <input type="number" name="height" min="0.1" step="0.1" required></label>
+                <label>Depth (cm) <input type="number" name="depth" min="0.1" step="0.1" required></label>
+            </div>
+            <div class="rotate-buttons">
+                <span>Rotate</span>
+                <button type="button" data-swap="width,depth" title="Quarter turn on the shelf: swaps width and depth">Turn</button>
+                <button type="button" data-swap="height,width" title="Lay it on its side: swaps height and width">Tip sideways</button>
+                <button type="button" data-swap="height,depth" title="Lay it on its face: swaps height and depth">Tip forward</button>
+            </div>
+            <label class="check"><input type="checkbox" name="rotationLocked"> This side up (can be turned on the shelf, never tipped over)</label>
+            <label class="check"><input type="checkbox" name="locked"> Lock in place (auto-sort won't move it off its shelf spot)</label>
+            <menu>
+                <button type="button" class="danger" data-close="delete">Delete</button>
+                <button type="button" data-close="cancel">Cancel</button>
+                <button type="submit" value="ok" class="primary">Add</button>
+            </menu>
+        </form>
+    </dialog>
+
+    <dialog id="dlgBookcase">
+        <form method="dialog">
+            <h3>Add Bookcase</h3>
+            <label>Name <input type="text" name="name" placeholder="(optional name)"></label>
+            <label title="Boxes that stick out past the front of a shelf by more than this are flagged, and auto-sort never does it. Only matters on shelves with Overhang ticked.">Furthest a box may stick out past the front (cm) <input type="number" name="maxOverhang" min="0" step="0.1" required></label>
+            <div class="dims">
+                <label>Shelf width (cm) <input type="number" name="width" min="0.1" step="0.1" required></label>
+                <label>Shelf depth (cm) <input type="number" name="depth" min="0.1" step="0.1" required></label>
+                <label title="How many columns of shelves the bookcase has side by side. Every column has the same shelves.">Columns <input type="number" name="columns" min="1" max="12" step="1" required></label>
+            </div>
+            <table class="shelf-table">
+                <thead>
+                    <tr>
+                        <th>Shelf (top to bottom)</th>
+                        <th>Height (cm)</th>
+                        <th title="Boxes deeper than the shelf may stick out the front. Untick for shelves behind doors.">Overhang</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="shelfRows"></tbody>
+            </table>
+            <button type="button" id="btnAddShelf">+ Shelf</button>
+            <menu>
+                <button type="button" class="danger" data-close="delete">Delete</button>
+                <button type="button" data-close="cancel">Cancel</button>
+                <button type="submit" value="ok" class="primary">Add</button>
+            </menu>
+        </form>
+    </dialog>
+
+    <dialog id="dlgSort">
+        <form method="dialog">
+            <h3>Auto-Sort</h3>
+            <p class="hint">Games may be turned a different way up to fit. Each layout is shown as it is tried.</p>
+            <button type="button" class="sort-choice" data-close="everything">
+                <strong>Sort everything</strong> <span class="count" id="sortEverythingCount"></span>
+                <span>Takes every unlocked game off the shelves and rearranges them all. Locked games stay where they are.</span>
+            </button>
+            <button type="button" class="sort-choice" data-close="unsorted">
+                <strong>Sort unsorted only</strong> <span class="count" id="sortUnsortedCount"></span>
+                <span>Leaves the shelved games where they are and fits the unsorted games in around them.</span>
+            </button>
+            <menu>
+                <button type="button" data-close="cancel">Cancel</button>
+            </menu>
+        </form>
+    </dialog>
+
+    <dialog id="dlgTopView">
+        <form method="dialog">
+            <div class="top-zoom">
+                <label for="topZoom">Zoom</label>
+                <input type="range" id="topZoom" min="2" max="16" step="0.25">
+                <button type="button" id="btnTopFit">Fit</button>
+            </div>
+            <h3>Top view</h3>
+            <p class="hint">Top: looking down on the shelf. Drag a box to slide it sideways, backwards or forwards. Bottom: the same shelf from the front. Drag a box there to move or stack it. Unsorted games at the sides can be dragged onto either, and shelved ones dragged back.</p>
+            <div class="top-layout">
+                <aside class="pile-panel top-pile">
+                    <h2>Unsorted</h2>
+                    <div class="pile" id="topPileLeft"></div>
+                </aside>
+                <div class="top-centre">
+                    <div class="top-caption">Back wall</div>
+                    <div class="top-plan" id="topPlan"></div>
+                    <div class="top-caption">Front</div>
+                    <div class="top-shelf" id="topShelf"></div>
+                </div>
+                <aside class="pile-panel top-pile">
+                    <h2>Unsorted</h2>
+                    <div class="pile" id="topPileRight"></div>
+                </aside>
+            </div>
+            <p class="hint" id="topViewMessage"></p>
+            <menu>
+                <button type="button" class="primary" data-close="cancel">Done</button>
+            </menu>
+        </form>
+    </dialog>
+
+    <script src="js/vendor/xlsx.full.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

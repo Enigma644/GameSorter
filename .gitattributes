@@ -1,0 +1,2 @@
+# Keep the test runner runnable in Git Bash on Windows, where checkouts would otherwise convert it to CRLF
+*.sh text eol=lf
