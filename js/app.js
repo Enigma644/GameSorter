@@ -34,7 +34,8 @@ let nextId = 1;
 function makeShelf(name, width, height, depth, allowOverhang)
 {
     // allowOverhang: boxes deeper than the shelf may stick out the front (untick for shelves behind doors)
-    return { id: nextId++, name: name, width: width, height: height, depth: depth, allowOverhang: allowOverhang };
+    // locked: everything on the shelf is fixed - nothing can be added, moved or taken off, by hand or by the sorter
+    return { id: nextId++, name: name, width: width, height: height, depth: depth, allowOverhang: allowOverhang, locked: false };
 }
 
 // A bookcase is a grid: `columns` side by side, each with the same `count` shelves from top to bottom. Every shelf in
@@ -305,12 +306,12 @@ function resetAll()
     showMessage("Reset to defaults");
 }
 
-// Removes every game that isn't locked in place. Bookcases and locked games stay.
+// Removes every game that isn't locked in place or on a locked shelf. Bookcases and those games stay.
 function clearGames()
 {
     const removable = state.games.filter(function (game)
     {
-        return !game.locked;
+        return !isFixed(game);
     });
 
     if (removable.length === 0)
@@ -328,10 +329,7 @@ function clearGames()
         return;
     }
 
-    state.games = state.games.filter(function (game)
-    {
-        return game.locked;
-    });
+    state.games = state.games.filter(isFixed);
 
     // Locked games that were resting on removed ones drop
     for (const bookcase of state.bookcases)
@@ -386,6 +384,21 @@ function gamesOnShelf(shelfId)
     {
         return game.placement && game.placement.shelfId === shelfId;
     });
+}
+
+// True when a game has to stay exactly where it is: it is locked in place itself, or it is on a locked shelf
+function isFixed(game)
+{
+    return game.locked || Boolean(game.placement && findShelf(game.placement.shelfId).locked);
+}
+
+function toggleShelfLock(shelfId)
+{
+    const shelf = findShelf(shelfId);
+
+    shelf.locked = !shelf.locked;
+    render();
+    showMessage(shelfLabel(shelfId) + (shelf.locked ? " locked: its games stay put and nothing can be added" : " unlocked"));
 }
 
 // ---------- Shelf physics ----------
@@ -745,7 +758,8 @@ function createShelfElement(shelf, title, withTopButton)
     const shelfEl = document.createElement("div");
     shelfEl.className = "shelf";
     shelfEl.dataset.id = shelf.id;
-    shelfEl.title = title + "\n" + formatDims(shelf) + (shelf.allowOverhang ? "" : "\nNo overhang");
+    shelfEl.title = title + "\n" + formatDims(shelf) + (shelf.allowOverhang ? "" : "\nNo overhang") + (shelf.locked ? "\nLocked" : "");
+    shelfEl.classList.toggle("locked", Boolean(shelf.locked));
     shelfEl.style.setProperty("--w", shelf.width);
     shelfEl.style.setProperty("--h", shelf.height);
 
@@ -778,6 +792,21 @@ function createShelfElement(shelf, title, withTopButton)
         topButton.setAttribute("aria-label", "Top view of this shelf");
         topButton.dataset.shelf = shelf.id;
         shelfEl.appendChild(topButton);
+
+        // A padlock, shut when the shelf is locked
+        const lockButton = document.createElement("button");
+        lockButton.type = "button";
+        lockButton.className = "shelf-lock-button";
+        lockButton.innerHTML =
+            "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+            "<rect x='5' y='11' width='14' height='10' rx='2'/><path d='" + (shelf.locked ? "M8 11V7a4 4 0 0 1 8 0v4" : "M8 11V7a4 4 0 0 1 7.5-2") + "'/></svg>";
+        lockButton.title = shelf.locked
+            ? "Unlock this shelf"
+            : "Lock this shelf: its games stay put and nothing can be added to it, by hand or by auto-sort";
+        lockButton.setAttribute("aria-label", shelf.locked ? "Unlock this shelf" : "Lock this shelf");
+        lockButton.setAttribute("aria-pressed", String(Boolean(shelf.locked)));
+        lockButton.dataset.shelf = shelf.id;
+        shelfEl.appendChild(lockButton);
     }
 
     // Back to front, so that in the flat 2D view the nearer boxes are drawn over the ones behind them
@@ -925,6 +954,7 @@ function renderViewMode()
     // The oblique projection, and the room (in cm) the sheared shelves need to the left of and below each bookcase
     root.setProperty("--frame-transform", "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, " + -SHEAR + ", " + SHEAR + ", 1, 0, 0, 0, 0, 1)");
     root.setProperty("--pad", maxShelfDepth() * 1.5 * SHEAR);
+    root.setProperty("--shear", SHEAR);
     document.getElementById("btnView2d").setAttribute("aria-pressed", String(!state.view3d));
     document.getElementById("btnView3d").setAttribute("aria-pressed", String(state.view3d));
 }
@@ -1626,7 +1656,12 @@ function planDrop(game, shelf, x, y)
         { x: x, y: restY, z: z, w: game.width, h: game.height, d: game.depth },
         others.map(blockOf)) < MIN_SUPPORT - EPS;
 
-    if (game.width > shelf.width + EPS)
+    if (shelf.locked)
+    {
+        plan.valid = false;
+        plan.reason = "That shelf is locked";
+    }
+    else if (game.width > shelf.width + EPS)
     {
         plan.valid = false;
         plan.reason = label + " is wider than that shelf";
@@ -1710,7 +1745,12 @@ function updatePlanHover(e)
 
     plan.reason = plan.valid ? "" : "Not enough height left for " + label + " there";
 
-    if (game.width > shelf.width + EPS)
+    if (shelf.locked)
+    {
+        plan.valid = false;
+        plan.reason = "That shelf is locked";
+    }
+    else if (game.width > shelf.width + EPS)
     {
         plan.valid = false;
         plan.reason = label + " is wider than that shelf";
@@ -1963,9 +2003,11 @@ function initBoxDrag()
                 return;
             }
 
-            if (boxDrag.game.locked)
+            if (isFixed(boxDrag.game))
             {
-                showMessage((boxDrag.game.name || "Unnamed game") + " is locked in place · double-click it to unlock");
+                showMessage((boxDrag.game.name || "Unnamed game") + (boxDrag.game.locked
+                    ? " is locked in place · double-click it to unlock"
+                    : " is on a locked shelf · unlock the shelf to move it"));
                 boxDrag = null;
                 return;
             }
@@ -2251,9 +2293,9 @@ function initTopView()
 
         const game = findGame(Number(el.dataset.id));
 
-        if (game.locked)
+        if (isFixed(game))
         {
-            showTopViewMessage((game.name || "Unnamed game") + " is locked in place");
+            showTopViewMessage((game.name || "Unnamed game") + (game.locked ? " is locked in place" : " is on a locked shelf"));
             return;
         }
 
@@ -2403,7 +2445,7 @@ function unshelveUnlocked()
 {
     const movable = state.games.filter(function (game)
     {
-        return game.placement && !game.locked;
+        return game.placement && !isFixed(game);
     });
 
     const count = movable.length;
@@ -2911,7 +2953,7 @@ function makeSortBins(movable)
 
     const staysPut = function (game)
     {
-        return movable ? !movable.has(game) : game.locked;
+        return movable ? !movable.has(game) : isFixed(game);
     };
 
     for (const bookcase of state.bookcases)
@@ -2920,6 +2962,12 @@ function makeSortBins(movable)
         {
             for (const shelf of columnShelves(bookcase, column).reverse())
             {
+                // A locked shelf is left exactly as it is
+                if (shelf.locked)
+                {
+                    continue;
+                }
+
                 bins.push({ shelf: shelf, maxOverhang: bookcase.maxOverhang, blocks: gamesOnShelf(shelf.id).filter(staysPut).map(blockOf) });
             }
         }
@@ -3296,7 +3344,7 @@ function openSortDialog()
 {
     const unlocked = state.games.filter(function (game)
     {
-        return !game.locked;
+        return !isFixed(game);
     }).length;
 
     const unsorted = state.games.filter(function (game)
@@ -3336,7 +3384,7 @@ function autoSort(live, onlyUnsorted)
 
     const movable = state.games.filter(function (game)
     {
-        return onlyUnsorted ? !game.placement : !game.locked;
+        return onlyUnsorted ? !game.placement : !isFixed(game);
     });
 
     if (movable.length === 0)
@@ -3388,10 +3436,11 @@ function autoSort(live, onlyUnsorted)
 // Workbook layout: a "Shelves" sheet and a "Games" sheet.
 // Shelves has one row per shelf of a bookcase's column, top to bottom, grouped by bookcase number (left to right).
 // Columns, Width, Depth and Max Overhang describe the whole bookcase and are read from its first row; Shelf Name,
-// Height and Allow Overhang are per shelf, and apply to that shelf in every column.
+// Height and Allow Overhang are per shelf, and apply to that shelf in every column. Locked says in which columns
+// that shelf is locked: TRUE for all of them, or a list of column numbers such as "1, 3".
 // A game's Bookcase, Column and Shelf are positions counted from 1 (from the left, from the left, from the top);
 // blank means unsorted.
-const SHELF_COLUMNS = ["Bookcase", "Bookcase Name", "Columns", "Width", "Depth", "Max Overhang", "Shelf Name", "Height", "Allow Overhang"];
+const SHELF_COLUMNS = ["Bookcase", "Bookcase Name", "Columns", "Width", "Depth", "Max Overhang", "Shelf Name", "Height", "Allow Overhang", "Locked"];
 const GAME_COLUMNS = ["Name", "Width", "Height", "Depth", "This Side Up", "Lock In Place", "Bookcase", "Column", "Shelf", "X", "Y", "Z"];
 
 function exportWorkbook()
@@ -3409,9 +3458,19 @@ function exportWorkbook()
             positions.set(shelf.id, { bookcase: bookcaseIndex + 1, column: Math.floor(index / perColumn) + 1, shelf: index % perColumn + 1 });
         });
 
-        // The columns are identical, so the first one describes them all
-        for (const shelf of columnShelves(bookcase, 0))
+        // The columns are identical apart from which shelves are locked, so the first one describes them all
+        columnShelves(bookcase, 0).forEach(function (shelf, row)
         {
+            const lockedColumns = [];
+
+            for (let column = 0; column < bookcase.columns; column++)
+            {
+                if (bookcase.shelves[column * perColumn + row].locked)
+                {
+                    lockedColumns.push(column + 1);
+                }
+            }
+
             shelfRows.push({
                 "Bookcase": bookcaseIndex + 1,
                 "Bookcase Name": bookcase.name,
@@ -3421,9 +3480,10 @@ function exportWorkbook()
                 "Max Overhang": bookcase.maxOverhang,
                 "Shelf Name": shelf.name,
                 "Height": shelf.height,
-                "Allow Overhang": shelf.allowOverhang
+                "Allow Overhang": shelf.allowOverhang,
+                "Locked": lockedColumns.length === 0 ? "" : (lockedColumns.length === bookcase.columns ? true : lockedColumns.join(", "))
             });
-        }
+        });
     });
 
     // Games are listed alphabetically, like the unsorted piles
@@ -3595,7 +3655,14 @@ function buildBookcases(rows)
         {
             for (const row of group)
             {
-                bookcase.shelves.push(makeShelf(cellText(row.shelfname), width, Number(row.height), depth, cellBool(row.allowoverhang, true)));
+                const shelf = makeShelf(cellText(row.shelfname), width, Number(row.height), depth, cellBool(row.allowoverhang, true));
+
+                // Locked is TRUE for every column, or a list of the column numbers it applies to
+                const locked = cellText(row.locked);
+                const listed = locked.split(/[\s,;]+/).map(Number);
+
+                shelf.locked = /^\d/.test(locked) && bookcase.columns > 1 ? listed.includes(column + 1) : cellBool(row.locked, false);
+                bookcase.shelves.push(shelf);
             }
         }
 
@@ -3812,9 +3879,15 @@ function init()
     {
         const topButton = e.target.closest(".top-view-button");
 
+        const lockButton = e.target.closest(".shelf-lock-button");
+
         if (topButton)
         {
             openTopView(Number(topButton.dataset.shelf));
+        }
+        else if (lockButton)
+        {
+            toggleShelfLock(Number(lockButton.dataset.shelf));
         }
     });
 
@@ -3840,7 +3913,7 @@ function init()
         const box = e.target.closest(".box");
         const bookcase = e.target.closest(".bookcase");
 
-        if (e.target.closest(".top-view-button"))
+        if (e.target.closest(".top-view-button, .shelf-lock-button"))
         {
             return;
         }

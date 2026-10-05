@@ -44,7 +44,7 @@ window.addEventListener("load", function ()
                     maxOverhang: bookcase.maxOverhang,
                     shelves: bookcase.shelves.map(function (s)
                     {
-                        return [s.name, s.height, s.width, s.depth, s.allowOverhang];
+                        return [s.name, s.height, s.width, s.depth, s.allowOverhang, Boolean(s.locked)];
                     })
                 };
             }),
@@ -107,6 +107,10 @@ window.addEventListener("load", function ()
         second.shelves[2].name = "Card games";
         second.shelves[1].allowOverhang = false;
         second.shelves[3].allowOverhang = false;
+
+        // One shelf locked in one column only, and one tall-BILLY shelf locked outright
+        second.shelves[3].locked = true;
+        state.bookcases[0].shelves[2].locked = true;
         second.maxOverhang = 4.5;
         state.bookcases.push(second);
 
@@ -134,7 +138,7 @@ window.addEventListener("load", function ()
         const gamesSheet = XLSX.utils.sheet_to_json(captured.Sheets.Games, { header: 1 });
         const shelvesSheet = XLSX.utils.sheet_to_json(captured.Sheets.Shelves, { header: 1 });
         check("Games header row", gamesSheet[0].join("|") === "Name|Width|Height|Depth|This Side Up|Lock In Place|Bookcase|Column|Shelf|X|Y|Z", gamesSheet[0].join("|"));
-        check("Shelves header row", shelvesSheet[0].join("|") === "Bookcase|Bookcase Name|Columns|Width|Depth|Max Overhang|Shelf Name|Height|Allow Overhang", shelvesSheet[0].join("|"));
+        check("Shelves header row", shelvesSheet[0].join("|") === "Bookcase|Bookcase Name|Columns|Width|Depth|Max Overhang|Shelf Name|Height|Allow Overhang|Locked", shelvesSheet[0].join("|"));
         const exportedNames = gamesSheet.slice(1).map(function (row) { return row[0] === undefined ? "" : String(row[0]); });
         check("games are exported in alphabetical order, with the unnamed one last",
             exportedNames[0] === "7 Wonders Duel" && exportedNames[exportedNames.length - 1] === "" &&

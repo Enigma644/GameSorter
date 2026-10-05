@@ -398,6 +398,33 @@ window.addEventListener("load", async function ()
             document.getElementById("message").textContent.indexOf("no unsorted games") >= 0, document.getElementById("message").textContent);
         window.confirm = function () { return true; };
 
+        // ---- A locked shelf is left exactly as it is
+        loadTwenty();
+        state.games.forEach(function (g) { g.placement = null; g.locked = false; g.rotationLocked = false; });
+
+        const lockedShelf = state.bookcases[0].shelves[5];
+        const resident = state.games[0];
+        resident.placement = { shelfId: lockedShelf.id, x: 10, y: 0, z: 0 };
+        lockedShelf.locked = true;
+        render();
+
+        const residentBefore = JSON.stringify([resident.width, resident.height, resident.depth, resident.placement]);
+        autoSort(false, false);
+        check("locked shelf: its unlocked game is not moved or turned by Sort everything, and nothing is added to the shelf",
+            JSON.stringify([resident.width, resident.height, resident.depth, resident.placement]) === residentBefore &&
+            gamesOnShelf(lockedShelf.id).length === 1 && shelved() === 20, gamesOnShelf(lockedShelf.id).length + " on the shelf, " + shelved() + " shelved");
+
+        unshelveUnlocked();
+        check("locked shelf: Unshelve Unlocked leaves its game there", shelved() === 1 && resident.placement !== null);
+
+        check("locked shelf: a drop onto it by hand is refused", planDrop(state.games[1], lockedShelf, 40, 0).valid === false);
+
+        clearGames();
+        check("locked shelf: Clear keeps its game and removes the rest", state.games.length === 1 && state.games[0] === resident);
+
+        document.querySelector(".shelf-lock-button[aria-pressed='true']").click();
+        check("locked shelf: its padlock button unlocks it again", lockedShelf.locked === false && document.querySelectorAll(".shelf.locked").length === 0);
+
         // ---- Scale
         loadTwenty();
         state.games = [];
