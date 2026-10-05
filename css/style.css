@@ -149,6 +149,27 @@ button[hidden]
     color: var(--muted);
 }
 
+/* The donation link, at the far right. A plain link styled as a button, with Ko-fi's cup icon kept in img/ so
+   that nothing is loaded from the donation site. */
+.donate
+{
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border: 1px solid var(--panel-edge);
+    border-radius: 4px;
+    background: #2e333c;
+    color: var(--text);
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.donate:hover
+{
+    background: #3a404b;
+}
+
 /* The 2D / 3D toggle: two buttons joined into one control */
 .segmented
 {

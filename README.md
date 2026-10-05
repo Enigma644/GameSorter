@@ -6,6 +6,8 @@ Enter the size of your board game boxes and your shelves, then arrange the games
 
 It is a single web page that runs entirely in the browser. There is no server side, no build step and no account: your collection is kept in the browser's local storage and can be saved to and loaded from a spreadsheet.
 
+Game Sorter is free to use. If it saved you a shelf, you can [buy me a coffee on Ko-fi](https://ko-fi.com/G2G6OWC55).
+
 ## Running it
 
 The easiest way is the hosted copy at https://enigma644.github.io/GameSorter/.
@@ -90,6 +92,7 @@ Columns, Width, Depth and Max Overhang describe the whole bookcase and are read 
 | `css/style.css` | All styling, including the 3D drawing                        |
 | `js/app.js`     | The whole application; its header comment lists the sections |
 | `js/vendor/`    | SheetJS, used for reading and writing spreadsheets           |
+| `img/`          | The Ko-fi cup icon used on the Donate button                 |
 | `tests/`        | Browser tests for sorting, stability and import/export       |
 
 ## Tests
@@ -108,6 +111,8 @@ Copyright © 2026 James Clutterbuck. All rights reserved.
 ### Third-party software
 
 This project includes [SheetJS Community Edition](https://sheetjs.com) 0.20.3 (`js/vendor/xlsx.full.min.js`), copyright SheetJS LLC, used under the Apache License 2.0. A copy of that licence is in `js/vendor/SheetJS-LICENSE.txt`.
+
+The cup icon on the Donate button (`img/kofi-cup.png`) is Ko-fi's, used to link to my Ko-fi page.
 
 ### Sample data
 
