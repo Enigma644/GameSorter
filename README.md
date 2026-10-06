@@ -23,7 +23,7 @@ It is built for a desktop browser with a mouse. Touch screens are not supported 
 - **Double-click** a game or a bookcase to edit it. The game editor shows the box in 3D and can rotate it.
 - **Drag a bookcase by its title** to reorder the bookcases left to right.
 - **Locking a shelf** (the padlock in its corner) fixes everything on it: its games cannot be moved, nothing can be added to it, and auto-sort, Unshelve Unlocked and Clear all leave it alone.
-- **Lock in place** stops the auto-sorter moving a game. **This side up** stops it tipping a game over (it may still turn it on the shelf).
+- **Lock in place** fixes a game exactly where it is. Auto-sort packs around it, and it stays put even if what it was resting on is removed, so a locked box can stand in for something like a shelf bracket that gets in the way. **This side up** stops it tipping a game over (it may still turn it on the shelf).
 - **2D / 3D** switches between two drawings of the same layout: flat from the front, or as solid boxes at an angle. Boxes can sit in front of each other in either view. The eye button in the corner of each shelf opens a top-down view for arranging it front to back; it sizes itself to the window and has its own zoom.
 - **Import / Export** loads and saves the collection as a spreadsheet. **Reset** goes back to the sample collection. **Clear** removes every game that is not locked in place and keeps the shelving, ready for your own collection.
 

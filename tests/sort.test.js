@@ -425,6 +425,55 @@ window.addEventListener("load", async function ()
         document.querySelector(".shelf-lock-button[aria-pressed='true']").click();
         check("locked shelf: its padlock button unlocks it again", lockedShelf.locked === false && document.querySelectorAll(".shelf.locked").length === 0);
 
+        // ---- Locked boxes ignore gravity, so one can stand in for a shelf bracket
+        loadTwenty();
+        state.games.forEach(function (g) { g.placement = null; g.locked = false; g.rotationLocked = false; });
+
+        const bracketShelf = state.bookcases[0].shelves[5];
+        const prop = state.games[0];
+        const bracket = state.games[1];
+        const rider = state.games[2];
+
+        // A prop on the floor, a bracket on the prop, and a box on the bracket
+        prop.width = 10; prop.height = 12; prop.depth = 20;
+        bracket.name = "Bracket"; bracket.width = 6; bracket.height = 2; bracket.depth = 20;
+        rider.width = 6; rider.height = 5; rider.depth = 20;
+        prop.placement = { shelfId: bracketShelf.id, x: 30, y: 0, z: 0 };
+        bracket.placement = { shelfId: bracketShelf.id, x: 30, y: 12, z: 0 };
+        rider.placement = { shelfId: bracketShelf.id, x: 30, y: 14, z: 0 };
+        bracket.locked = true;
+
+        unshelve(prop);
+        settleShelf(bracketShelf.id);
+        check("mid air: a locked box stays where it is when what was under it goes", bracket.placement.y === 12, "y " + bracket.placement.y);
+        check("mid air: an unlocked box above it comes to rest on it, not on the floor", rider.placement.y === 14, "y " + rider.placement.y);
+
+        render();
+        check("mid air: the hanging locked box is not flagged as unstable",
+            isStable(bracket) && document.querySelectorAll("#bookcases .box.unstable").length === 0);
+
+        state.games = [bracket, rider, state.games[3], state.games[4], state.games[5]];
+
+        // Three modest boxes to pack alongside the one that was riding on the bracket: enough to need the space
+        // under and around it, but not more than the one open shelf can hold
+        state.games.slice(2).forEach(function (g) { g.placement = null; g.width = 20; g.height = 8; g.depth = 20; });
+        unshelve(rider);
+        state.bookcases[0].shelves.forEach(function (s, i) { s.locked = i !== 5; });
+        autoSort(false, false);
+
+        const sortedOnShelf = gamesOnShelf(bracketShelf.id).filter(function (g) { return g !== bracket; });
+        const clashes = sortedOnShelf.filter(function (g) { return overlaps(g, bracket); });
+        check("mid air: auto-sort leaves the bracket where it is and packs around it without overlapping it",
+            bracket.placement.y === 12 && bracket.placement.x === 30 && sortedOnShelf.length === 4 && clashes.length === 0,
+            sortedOnShelf.length + " placed, " + clashes.length + " overlapping");
+        check("mid air: auto-sort uses the space underneath the bracket",
+            sortedOnShelf.some(function (g)
+            {
+                return g.placement.y + g.height <= 12 + EPS && overlapLength(g.placement.x, g.width, 30, 6) > EPS;
+            }), describe());
+        check("mid air: everything auto-sort placed is resting on something", sortedOnShelf.every(function (g) { return isStable(g); }));
+        state.bookcases[0].shelves.forEach(function (s) { s.locked = false; });
+
         // ---- Scale
         loadTwenty();
         state.games = [];

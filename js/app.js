@@ -331,7 +331,7 @@ function clearGames()
 
     state.games = state.games.filter(isFixed);
 
-    // Locked games that were resting on removed ones drop
+    // Games on locked shelves stay where they are; anything else left behind drops
     for (const bookcase of state.bookcases)
     {
         for (const shelf of bookcase.shelves)
@@ -556,8 +556,14 @@ function supportFraction(block, others)
     return supported / (block.w * block.d);
 }
 
+// A fixed game counts as stable whatever it is resting on, since it is held where it is
 function isStable(game)
 {
+    if (isFixed(game))
+    {
+        return true;
+    }
+
     const others = gamesOnShelf(game.placement.shelfId).filter(function (other)
     {
         return other !== game;
@@ -573,7 +579,9 @@ function unshelve(game)
 }
 
 // Drops every box on the shelf until it rests on the shelf floor or on another box.
-// Locked boxes fall too: the lock is against the auto-sorter, not against gravity.
+// Fixed boxes (locked in place, or on a locked shelf) are the exception: they stay exactly where they are, in mid
+// air if whatever was under them has gone. That lets a locked box stand in for something like a shelf bracket,
+// and the boxes above one come to rest on it.
 function settleShelf(shelfId)
 {
     const boxes = gamesOnShelf(shelfId).sort(function (a, b)
@@ -585,6 +593,12 @@ function settleShelf(shelfId)
 
     for (const box of boxes)
     {
+        if (isFixed(box))
+        {
+            settled.push(box);
+            continue;
+        }
+
         let y = 0;
 
         for (const below of settled)
@@ -2694,6 +2708,12 @@ function shelfRoom(bin)
 // False when a box w wide and h tall cannot fit anywhere on the shelf, whatever its depth. True means "maybe".
 function mightFit(bin, w, h)
 {
+    // The summary assumes boxes stand on one another all the way down, so it can't speak for a shelf with gaps
+    if (bin.gaps)
+    {
+        return true;
+    }
+
     if (!bin.room)
     {
         bin.room = shelfRoom(bin);
@@ -2801,89 +2821,108 @@ function bestSpot(bin, o, scoring)
                 continue;
             }
 
-            let y = 0;
-
-            for (const b of column)
+            // The heights the box could rest at. Normally there is just one: on top of whatever is under it.
+            // On a shelf where something hangs in mid air, the free space underneath that counts as well.
+            const under = column.filter(function (b)
             {
-                if (b.z < z + o.d - EPS && z < b.z + b.d - EPS)
+                return b.z < z + o.d - EPS && z < b.z + b.d - EPS;
+            });
+
+            let levels = [0];
+
+            for (const b of under)
+            {
+                if (bin.gaps)
                 {
-                    y = Math.max(y, b.y + b.h);
+                    levels.push(b.y + b.h);
+                }
+                else
+                {
+                    levels[0] = Math.max(levels[0], b.y + b.h);
                 }
             }
 
-            if (y + o.h > shelf.height + EPS)
+            levels = levels.filter(function (level)
             {
-                continue;
-            }
-
-            // A box in front of others has to be pushed back against one of them, not left standing in mid-shelf,
-            // and may not be bigger than any box it stands directly in front of: smaller games go at the front
-            if (z > EPS)
-            {
-                let pushedBack = false;
-                let biggerThanBehind = false;
-
-                for (const b of column)
+                const clear = !bin.gaps || !under.some(function (b)
                 {
-                    if (Math.abs(b.z + b.d - z) < EPS && b.y < y + o.h - EPS && y < b.y + b.h - EPS)
-                    {
-                        pushedBack = true;
+                    return b.y < level + o.h - EPS && level < b.y + b.h - EPS;
+                });
 
-                        if (volume > b.w * b.h * b.d + EPS)
+                return clear && level + o.h <= shelf.height + EPS;
+            });
+
+            for (const y of levels)
+            {
+                // A box in front of others has to be pushed back against one of them, not left standing in mid-shelf,
+                // and may not be bigger than any box it stands directly in front of: smaller games go at the front
+                if (z > EPS)
+                {
+                    let pushedBack = false;
+                    let biggerThanBehind = false;
+
+                    for (const b of column)
+                    {
+                        if (Math.abs(b.z + b.d - z) < EPS && b.y < y + o.h - EPS && y < b.y + b.h - EPS)
                         {
-                            biggerThanBehind = true;
+                            pushedBack = true;
+
+                            if (volume > b.w * b.h * b.d + EPS)
+                            {
+                                biggerThanBehind = true;
+                            }
                         }
+                    }
+
+                    if (!pushedBack || biggerThanBehind)
+                    {
+                        continue;
                     }
                 }
 
-                if (!pushedBack || biggerThanBehind)
+                const block = { x: x, y: y, z: z, w: o.w, h: o.h, d: o.d };
+                const support = supportFraction(block, column);
+
+                if (support < MIN_SUPPORT - EPS)
                 {
                     continue;
                 }
-            }
 
-            const block = { x: x, y: y, z: z, w: o.w, h: o.h, d: o.d };
-            const support = supportFraction(block, column);
-
-            if (support < MIN_SUPPORT - EPS)
-            {
-                continue;
-            }
-
-            // At least half of every game's front has to stay visible: this box past whatever stands in front
-            // of it, and each box behind it past this one. (A box that was already hidden when the sort began,
-            // by boxes that are staying put, is left as it was.)
-            if (!isVisible(block, column))
-            {
-                continue;
-            }
-
-            if (z > EPS)
-            {
-                const withBlock = blocks.concat([block]);
-                const hidesOne = column.some(function (b)
-                {
-                    return b.z + b.d <= z + EPS && isVisible(b, blocks) && !isVisible(b, withBlock);
-                });
-
-                if (hidesOne)
+                // At least half of every game's front has to stay visible: this box past whatever stands in front
+                // of it, and each box behind it past this one. (A box that was already hidden when the sort began,
+                // by boxes that are staying put, is left as it was.)
+                if (!isVisible(block, column))
                 {
                     continue;
                 }
-            }
 
-            // Resting entirely on the shelf or on boxes at least as big beats hanging over the edge of what is below:
-            // it keeps bigger boxes at the bottom of each stack and leaves no pockets of dead space underneath
-            const loose = support < 1 - 1e-3 ? 1 : 0;
-            const inFront = z > EPS ? 1 : 0;
-            const newWidth = Math.max(0, x + o.w - usedWidth);
-            const score = scoring === "narrow"
-                ? [inFront, loose, newWidth, y, x, z, overhang]
-                : [inFront, loose, y + o.h, newWidth, x, z, overhang];
+                if (z > EPS)
+                {
+                    const withBlock = blocks.concat([block]);
+                    const hidesOne = column.some(function (b)
+                    {
+                        return b.z + b.d <= z + EPS && isVisible(b, blocks) && !isVisible(b, withBlock);
+                    });
 
-            if (!best || compareScores(score, best.score) < 0)
-            {
-                best = { block: block, score: score };
+                    if (hidesOne)
+                    {
+                        continue;
+                    }
+                }
+
+                // Resting entirely on the shelf or on boxes at least as big beats hanging over the edge of what is below:
+                // it keeps bigger boxes at the bottom of each stack and leaves no pockets of dead space underneath
+                const loose = support < 1 - 1e-3 ? 1 : 0;
+                const inFront = z > EPS ? 1 : 0;
+                const newWidth = Math.max(0, x + o.w - usedWidth);
+                const score = scoring === "narrow"
+                    ? [inFront, loose, newWidth, y, x, z, overhang]
+                    : [inFront, loose, y + o.h, newWidth, x, z, overhang];
+
+                if (!best || compareScores(score, best.score) < 0)
+                {
+                    best = { block: block, score: score };
+                }
             }
         }
     }
@@ -2968,7 +3007,15 @@ function makeSortBins(movable)
                     continue;
                 }
 
-                bins.push({ shelf: shelf, maxOverhang: bookcase.maxOverhang, blocks: gamesOnShelf(shelf.id).filter(staysPut).map(blockOf) });
+                const blocks = gamesOnShelf(shelf.id).filter(staysPut).map(blockOf);
+
+                // gaps: something on this shelf hangs in mid air, so there may be usable space underneath it
+                const gaps = blocks.some(function (b)
+                {
+                    return b.y > EPS && supportFraction(b, blocks) < EPS;
+                });
+
+                bins.push({ shelf: shelf, maxOverhang: bookcase.maxOverhang, blocks: blocks, gaps: gaps });
             }
         }
     }
@@ -3395,7 +3442,7 @@ function autoSort(live, onlyUnsorted)
 
     if (!onlyUnsorted)
     {
-        // Unlocked games come off the shelves; locked ones that were resting on them drop
+        // Unlocked games come off the shelves; the locked ones stay exactly where they are
         for (const game of movable)
         {
             game.placement = null;
